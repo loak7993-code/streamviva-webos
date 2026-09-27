@@ -45,7 +45,14 @@ html, body {
   background: linear-gradient(180deg, #151020 0%, var(--bg) 55%, var(--bg-deep) 100%);
   transition: opacity .6s;
 }
-#splash.done { opacity: 0; pointer-events: none; }
+#splash.done { opacity: 0; visibility: hidden; pointer-events: none; }
+/* failsafe: hide the splash even if JS never runs (stale cache, crash) */
+#splash { animation: splashAutoHide 0.8s ease 8s forwards; }
+@keyframes splashAutoHide { to { opacity: 0; visibility: hidden; pointer-events: none; } }
+.splash-ver {
+  position: absolute; bottom: 26px; right: 32px;
+  font-size: 13px; color: #4a4a54; letter-spacing: 2px;
+}
 .splash-mark { font-family: var(--serif); font-size: 72px; color: var(--white); }
 .splash-mark em { font-style: italic; color: var(--iris-soft); }
 .splash-sub {
@@ -463,3 +470,13 @@ html, body {
   color: var(--text3); font-size: 20px;
   text-align: center; line-height: 1.7;
 }
+
+/* on-screen boot errors */
+#boot-error {
+  position: fixed; inset: auto 40px 40px 40px; z-index: 200;
+  background: #2a1215; border: 1px solid #e88383;
+  color: #f0c8c8; border-radius: 12px;
+  padding: 18px 24px; font-size: 15px; line-height: 1.5;
+  display: none; white-space: pre-wrap;
+}
+#boot-error.show { display: block; }

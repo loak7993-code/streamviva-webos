@@ -39,8 +39,66 @@ const S = {
   cache: {},                // tmdb responses per tab
 };
 
+const APP_VERSION = "1.1.1";
+
 const $ = (id) => document.getElementById(id);
-const video = $("video");
+
+/* surface any boot error on screen instead of a silent blank page */
+function fatal(msg) {
+  let el = document.getElementById("boot-error");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "boot-error";
+    document.body.appendChild(el);
+  }
+  el.textContent = "StreamViva v" + APP_VERSION + " — " + msg;
+  el.classList.add("show");
+  // always clear the splash so the error is visible
+  const sp = document.getElementById("splash");
+  if (sp) sp.classList.add("done");
+  const app = document.getElementById("app");
+  if (app) app.classList.remove("hidden");
+}
+window.onerror = function (msg, src, line) {
+  fatal(msg + " (" + (src || "?").split("/").pop() + ":" + line + ")");
+  return false;
+};
+
+/* defensive: ensure required elements exist even against stale cached HTML */
+function ensureElements() {
+  const need = {
+    tabs: () => '<nav id="tabs"></nav>',
+    content: () => '<main id="content"></main>',
+    player: () => '<div id="player" class="hidden"><video id="video" autoplay playsinline></video><div id="player-top"><div class="wordmark small">Stream<em>Viva</em></div><div id="player-title"></div><div class="player-actions"><div class="top-btn" id="btn-subs">CC</div><div class="top-btn" id="btn-stop">Stop</div></div></div><div id="player-busy"><div class="spinner"></div></div></div>',
+    "search-overlay": () => '<div id="search-overlay" class="hidden"><input id="search-input" type="text" placeholder="Search movies, shows..." autocomplete="off" /><div id="search-results"></div></div>',
+    "subs-overlay": () => '<div id="subs-overlay" class="hidden"><div class="subs-panel"><div class="subs-title">Subtitles</div><div id="subs-list"></div></div></div>',
+    "btn-search": () => '<div class="top-btn" id="btn-search">Search</div>',
+    topbar: () => '<header id="topbar"><div class="wordmark">Stream<em>Viva</em></div><nav id="tabs"></nav><div class="top-actions"><div class="top-btn" id="btn-search">Search</div></div></header>',
+  };
+  if (!document.getElementById("topbar") && document.getElementById("app")) {
+    document.getElementById("app").innerHTML = need.topbar().replace(/<header[^>]*>|<\/header>/g, "") ;
+  }
+  for (const id of ["topbar", "tabs", "content", "player", "video", "search-overlay", "search-input", "search-results", "subs-overlay", "subs-list", "btn-search", "btn-subs", "btn-stop", "player-title", "player-busy"]) {
+    if (!document.getElementById(id)) {
+      if (id === "tabs" && document.getElementById("topbar")) {
+        const nav = document.createElement("nav");
+        nav.id = "tabs";
+        document.getElementById("topbar").appendChild(nav);
+      } else if (id === "btn-search" && document.getElementById("topbar")) {
+        const btn = document.createElement("div");
+        btn.className = "top-btn"; btn.id = "btn-search"; btn.textContent = "Search";
+        document.getElementById("topbar").appendChild(btn);
+      } else if (id === "video" && document.getElementById("player")) {
+        document.getElementById("player").insertAdjacentHTML("afterbegin", '<video id="video" autoplay playsinline></video>');
+      } else if (id === "player-title" && document.getElementById("player-top")) {
+        const t = document.createElement("div"); t.id = "player-title";
+        document.getElementById("player-top").appendChild(t);
+      }
+    }
+  }
+}
+
+let video = null;
 
 /* ------------------------- helpers ------------------------- */
 
@@ -671,8 +729,6 @@ function closeSearch() {
   $("search-input").blur();
 }
 
-$("btn-search").addEventListener("click", openSearch);
-
 /* ------------------------- stream resolution ------------------------- */
 
 async function resolveStream(media, season, episode) {
@@ -759,22 +815,24 @@ async function play(media, season, episode, resumeMs) {
   }
 }
 
-video.addEventListener("playing", () => { $("player-busy").style.display = "none"; });
-video.addEventListener("error", () => {
-  $("player-busy").style.display = "none";
-  toast("Playback error");
-});
-video.addEventListener("timeupdate", () => {
-  if (!S.playing || !video.duration || video.currentTime < 5) return;
-  const { media, season, episode } = S.playing;
-  const cont = LS.get("sv_progress", {});
-  cont[media.id + ":s" + (season || "") + "e" + (episode || "")] = {
-    tmdbId: String(media.id), title: media.title, poster: media.poster,
-    type: media.type, positionMs: video.currentTime * 1000, durationMs: video.duration * 1000,
-    season, episode, updatedAt: Date.now(),
-  };
-  LS.set("sv_progress", cont);
-});
+function initVideoListeners(v) {
+  v.addEventListener("playing", () => { $("player-busy").style.display = "none"; });
+  v.addEventListener("error", () => {
+    $("player-busy").style.display = "none";
+    toast("Playback error");
+  });
+  v.addEventListener("timeupdate", () => {
+    if (!S.playing || !v.duration || v.currentTime < 5) return;
+    const { media, season, episode } = S.playing;
+    const cont = LS.get("sv_progress", {});
+    cont[media.id + ":s" + (season || "") + "e" + (episode || "")] = {
+      tmdbId: String(media.id), title: media.title, poster: media.poster,
+      type: media.type, positionMs: v.currentTime * 1000, durationMs: v.duration * 1000,
+      season, episode, updatedAt: Date.now(),
+    };
+    LS.set("sv_progress", cont);
+  });
+}
 
 function stopPlayback() {
   video.pause();
@@ -786,6 +844,16 @@ function stopPlayback() {
 }
 
 let uiTimer;
+function initPlayerUi() {
+  const p = $("player");
+  if (!p || p._wired) return;
+  p._wired = true;
+  p.addEventListener("mousemove", () => {
+    p.classList.remove("hide-ui");
+    clearTimeout(uiTimer);
+    uiTimer = setTimeout(() => p.classList.add("hide-ui"), 3500);
+  });
+}
 function toggleUi() {
   const p = $("player");
   if (p.classList.contains("hide-ui")) {
@@ -796,17 +864,6 @@ function toggleUi() {
     p.classList.add("hide-ui");
   }
 }
-$("player").addEventListener("mousemove", () => {
-  $("player").classList.remove("hide-ui");
-  clearTimeout(uiTimer);
-  uiTimer = setTimeout(() => $("player").classList.add("hide-ui"), 3500);
-});
-$("btn-stop").addEventListener("click", stopPlayback);
-$("btn-subs").addEventListener("click", () => {
-  if (!S.subs.length) { toast("No subtitles found"); return; }
-  openSubs();
-});
-
 /* ------------------------- subtitles ------------------------- */
 
 async function loadSubs(media, season, episode) {
@@ -962,8 +1019,26 @@ function closeSubs() {
 
 window.addEventListener("load", () => {
   setTimeout(() => {
-    $("splash").classList.add("done");
-    $("app").classList.remove("hidden");
-    showTab("home");
+    try {
+      ensureElements();
+      video = $("video");
+      if (video) initVideoListeners(video);
+      if (!video || !$("content") || !$("tabs")) {
+        fatal("UI elements missing — reinstall the app (fully close it first)");
+        return;
+      }
+      $("btn-search").addEventListener("click", openSearch);
+      $("btn-stop").addEventListener("click", stopPlayback);
+      initPlayerUi();
+      $("btn-subs").addEventListener("click", () => {
+        if (!S.subs.length) { toast("No subtitles found"); return; }
+        openSubs();
+      });
+      $("splash").classList.add("done");
+      $("app").classList.remove("hidden");
+      showTab("home");
+    } catch (e) {
+      fatal(e.message);
+    }
   }, 1600);
 });
