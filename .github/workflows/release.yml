@@ -1,0 +1,48 @@
+name: Release IPK
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Package ipk
+        run: |
+          APP=tech.streamviva.app
+          APPDIR="usr/palm/applications/$APP"
+          mkdir -p "pkgroot/$APPDIR"
+          cp $APP/appinfo.json $APP/index.html $APP/style2.css $APP/icon.png $APP/largeIcon.png "pkgroot/$APPDIR/"
+          (cd pkgroot && tar czf ../data.tar.gz usr)
+          mkdir -p ctrlroot
+          VERSION=$(python3 -c "import json; print(json.load(open('$APP/appinfo.json'))['version'])")
+          SIZE=$(du -sk pkgroot | cut -f1)
+          cat > ctrlroot/control <<CTRL
+          Package: tech.streamviva.app
+          Version: $VERSION
+          Section: misc
+          Priority: optional
+          Architecture: all
+          Installed-Size: $SIZE
+          Maintainer: StreamViva <dev@streamviva.app>
+          Description: StreamViva for webOS TV
+          webOS-Package-Format-Version: 2
+          webOS-Packager-Version: 1.0.0
+          CTRL
+          (cd ctrlroot && tar czf ../control.tar.gz control)
+          echo "2.0" > debian-binary
+          python3 build-ipk.py debian-binary control.tar.gz data.tar.gz "streamviva-webos-$VERSION.ipk"
+
+      - name: Create release with IPK
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "StreamViva webOS ${{ github.ref_name }}"
+          generate_release_notes: true
+          files: streamviva-webos-*.ipk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
