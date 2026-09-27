@@ -39,7 +39,12 @@ const S = {
   cache: {},                // tmdb responses per tab
 };
 
-const APP_VERSION = "1.1.1";
+const APP_VERSION = "1.2.0";
+
+function step(msg) {
+  window.__lastStep = msg;
+  if (window.__diag) window.__diag(msg);
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -265,19 +270,26 @@ function showTab(tab) {
   S.view = "tab";
   renderTabs();
   renderTabContent();
+  setTimeout(function () {
+    var d = document.getElementById("diag");
+    if (d && document.querySelectorAll(".card").length > 0) d.classList.remove("show");
+  }, 1500);
 }
 
 async function renderTabContent() {
   const c = $("content");
   c.innerHTML = '<div class="loading">Loading…</div>';
   S.rows = [];
+  step("tab: " + S.tab + " — fetching");
 
   try {
     if (S.tab === "home") await renderHome(c);
     else if (S.tab === "movies") await renderMovies(c);
     else if (S.tab === "shows") await renderShows(c);
     else renderList(c);
+    step("tab: " + S.tab + " — rendered " + document.querySelectorAll(".card").length + " cards");
   } catch (e) {
+    step("ERROR: " + e.message);
     c.innerHTML = `<div class="loading" style="color:#e88383">⚠ ${e.message}</div>`;
   }
   setFocus(0, TABS.findIndex((t) => t.id === S.tab));
@@ -1020,8 +1032,10 @@ function closeSubs() {
 window.addEventListener("load", () => {
   setTimeout(() => {
     try {
+      step("boot: elements check");
       ensureElements();
       video = $("video");
+      step("boot: video=" + !!video);
       if (video) initVideoListeners(video);
       if (!video || !$("content") || !$("tabs")) {
         fatal("UI elements missing — reinstall the app (fully close it first)");
@@ -1034,9 +1048,11 @@ window.addEventListener("load", () => {
         if (!S.subs.length) { toast("No subtitles found"); return; }
         openSubs();
       });
+      step("boot: launching home");
       $("splash").classList.add("done");
       $("app").classList.remove("hidden");
       showTab("home");
+      step("home: rendering");
     } catch (e) {
       fatal(e.message);
     }

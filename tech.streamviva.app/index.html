@@ -5,13 +5,31 @@
   <title>StreamViva</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="style2.css" />
+  <script>
+    /* ---- inline boot diagnostics: runs before anything else, cannot fail ---- */
+    window.__diag = function (msg) {
+      var el = document.getElementById("diag");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "diag";
+        (document.body || document.documentElement).appendChild(el);
+      }
+      el.textContent = msg;
+      el.classList.add("show");
+    };
+    window.onerror = function (msg, src, line) {
+      window.__diag("ERROR: " + msg + " @ " + (src || "?").split("/").pop() + ":" + line);
+      return false;
+    };
+    window.__diag("boot: html loaded");
+    window.addEventListener("load", function () { window.__diag("boot: window load"); });
+  </script>
 </head>
 <body>
-  <!-- splash: CSS auto-hides it even if JS fails (webview cache safety) -->
   <div id="splash">
     <div class="splash-mark">Stream<em>Viva</em></div>
     <div class="splash-sub">now showing</div>
-    <div class="splash-ver">v1.1.2</div>
+    <div class="splash-ver">v1.2.0</div>
   </div>
 
   <div id="app" class="hidden">
@@ -51,6 +69,15 @@
     </div>
   </div>
 
-  <script src="app2.js"></script>
+  <script src="app2.js" onerror="window.__diag('ERROR: app2.js FAILED TO LOAD')" onload="window.__diag('boot: app2.js loaded')"></script>
+  <script>
+    /* watchdog: if boot hasn't rendered content within 12s, report the last step */
+    setTimeout(function () {
+      if (!document.querySelector(".tab")) {
+        var last = window.__lastStep || "none";
+        window.__diag("STUCK at: " + last + " — no tabs rendered. app2.js loaded: " + (typeof window.showTab === "function"));
+      }
+    }, 12000);
+  </script>
 </body>
 </html>

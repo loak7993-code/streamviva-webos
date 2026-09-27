@@ -480,3 +480,14 @@ html, body {
   display: none; white-space: pre-wrap;
 }
 #boot-error.show { display: block; }
+
+/* boot diagnostics strip */
+#diag {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 300;
+  background: #1a1a2e; color: #9fd6ff;
+  font-size: 14px; padding: 8px 16px;
+  border-bottom: 1px solid #3a3a5e;
+  display: none; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis;
+}
+#diag.show { display: block; }
