@@ -1,0 +1,10 @@
+Package: tech.streamviva.app
+Version: 1.0.1
+Section: misc
+Priority: optional
+Architecture: all
+Installed-Size: 72
+Maintainer: StreamViva <dev@streamviva.app>
+Description: StreamViva — movies, shows and anime for webOS TV
+webOS-Package-Format-Version: 2
+webOS-Packager-Version: 1.0.0
