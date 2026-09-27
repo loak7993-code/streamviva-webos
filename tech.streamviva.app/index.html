@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>StreamViva</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="splash">
+    <div class="splash-mark">Stream<em>Viva</em></div>
+    <div class="splash-sub">now showing</div>
+  </div>
+
+  <div id="app" class="hidden">
+    <header id="topbar">
+      <div class="wordmark">Stream<em>Viva</em></div>
+      <div class="top-actions">
+        <div class="top-btn" id="btn-search">Search</div>
+        <div class="top-btn" id="btn-favorites">My List</div>
+      </div>
+    </header>
+
+    <main id="content"></main>
+  </div>
+
+  <div id="player" class="hidden">
+    <video id="video" autoplay playsinline></video>
+    <div id="player-top">
+      <div class="wordmark small">Stream<em>Viva</em></div>
+      <div id="player-title"></div>
+      <div class="player-actions">
+        <div class="top-btn" id="btn-subs">CC</div>
+        <div class="top-btn" id="btn-stop">Stop</div>
+      </div>
+    </div>
+    <div id="player-busy"><div class="spinner"></div></div>
+  </div>
+
+  <div id="search-overlay" class="hidden">
+    <input id="search-input" type="text" placeholder="Search movies, shows..." autocomplete="off" />
+    <div id="search-results"></div>
+  </div>
+
+  <div id="subs-overlay" class="hidden">
+    <div class="subs-panel">
+      <div class="subs-title">Subtitles</div>
+      <div id="subs-list"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

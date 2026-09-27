@@ -1,0 +1,12 @@
+{
+  "id": "tech.streamviva.app",
+  "version": "1.0.0",
+  "vendor": "StreamViva",
+  "type": "web",
+  "main": "index.html",
+  "title": "StreamViva",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "bgColor": "#0d0d10",
+  "requiredMemory": 20
+}
