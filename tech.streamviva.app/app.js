@@ -39,35 +39,9 @@ const S = {
   cache: {},                // tmdb responses per tab
 };
 
-const APP_VERSION = "1.2.0";
-
-function step(msg) {
-  window.__lastStep = msg;
-  if (window.__diag) window.__diag(msg);
-}
+const APP_VERSION = "1.4.0";
 
 const $ = (id) => document.getElementById(id);
-
-/* surface any boot error on screen instead of a silent blank page */
-function fatal(msg) {
-  let el = document.getElementById("boot-error");
-  if (!el) {
-    el = document.createElement("div");
-    el.id = "boot-error";
-    document.body.appendChild(el);
-  }
-  el.textContent = "StreamViva v" + APP_VERSION + " — " + msg;
-  el.classList.add("show");
-  // always clear the splash so the error is visible
-  const sp = document.getElementById("splash");
-  if (sp) sp.classList.add("done");
-  const app = document.getElementById("app");
-  if (app) app.classList.remove("hidden");
-}
-window.onerror = function (msg, src, line) {
-  fatal(msg + " (" + (src || "?").split("/").pop() + ":" + line + ")");
-  return false;
-};
 
 /* defensive: ensure required elements exist even against stale cached HTML */
 function ensureElements() {
@@ -270,27 +244,25 @@ function showTab(tab) {
   S.view = "tab";
   renderTabs();
   renderTabContent();
-  setTimeout(function () {
-    var d = document.getElementById("diag");
-    if (d && document.querySelectorAll(".card").length > 0) d.classList.remove("show");
-  }, 1500);
 }
 
 async function renderTabContent() {
   const c = $("content");
-  c.innerHTML = '<div class="loading">Loading…</div>';
+  c.innerHTML = '<div class="skeleton-blocks"><div class="skel-hero"></div>' +
+    '<div class="skel-row"></div>'.repeat(3) + "</div>";
   S.rows = [];
-  step("tab: " + S.tab + " — fetching");
 
   try {
     if (S.tab === "home") await renderHome(c);
     else if (S.tab === "movies") await renderMovies(c);
     else if (S.tab === "shows") await renderShows(c);
     else renderList(c);
-    step("tab: " + S.tab + " — rendered " + document.querySelectorAll(".card").length + " cards");
+    // first successful render: fade the boot screen
+    var sp = document.getElementById("splash");
+    if (sp && !sp.classList.contains("done")) sp.classList.add("done");
+    staggerRows();
   } catch (e) {
-    step("ERROR: " + e.message);
-    c.innerHTML = `<div class="loading" style="color:#e88383">⚠ ${e.message}</div>`;
+    c.innerHTML = '<div class="loading" style="color:#e88383">⚠ ' + e.message + "</div>";
   }
   setFocus(0, TABS.findIndex((t) => t.id === S.tab));
 }
@@ -406,6 +378,14 @@ function renderList(c) {
 
 /* ------------------------- rows & cards ------------------------- */
 
+function staggerRows() {
+  var rows = document.querySelectorAll(".row, .hero");
+  for (var i = 0; i < rows.length; i++) {
+    rows[i].style.animationDelay = (i * 70) + "ms";
+    rows[i].classList.add("rise-in");
+  }
+}
+
 function addTabRow() {
   S.rows.push({
     el: $("tabs"),
@@ -483,7 +463,8 @@ async function openDetails(media, autoPlay) {
   S.view = "details";
   S.current = media;
   $("topbar").classList.add("scrolled");
-  $("content").innerHTML = '<div class="loading">Loading…</div>';
+  $("content").innerHTML = '<div class="skeleton-blocks"><div class="skel-hero"></div>' +
+    '<div class="skel-row"></div>'.repeat(3) + "</div>";
   S.rows = [];
 
   try {
@@ -1032,13 +1013,10 @@ function closeSubs() {
 window.addEventListener("load", () => {
   setTimeout(() => {
     try {
-      step("boot: elements check");
       ensureElements();
       video = $("video");
-      step("boot: video=" + !!video);
       if (video) initVideoListeners(video);
       if (!video || !$("content") || !$("tabs")) {
-        fatal("UI elements missing — reinstall the app (fully close it first)");
         return;
       }
       $("btn-search").addEventListener("click", openSearch);
@@ -1048,13 +1026,10 @@ window.addEventListener("load", () => {
         if (!S.subs.length) { toast("No subtitles found"); return; }
         openSubs();
       });
-      step("boot: launching home");
-      $("splash").classList.add("done");
       $("app").classList.remove("hidden");
       showTab("home");
-      step("home: rendering");
     } catch (e) {
-      fatal(e.message);
+      try { $("splash").classList.add("done"); } catch (e2) {}
     }
-  }, 1600);
+  }, 900);
 });
