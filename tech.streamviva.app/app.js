@@ -39,7 +39,14 @@ const S = {
   cache: {},                // tmdb responses per tab
 };
 
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.5.0";
+
+function applyZoom() {
+  var scale = window.innerWidth / 1280;
+  if (scale < 0.5) scale = 0.5;
+  if (scale > 3) scale = 3;
+  document.body.style.zoom = scale;
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -184,6 +191,19 @@ function activate() {
 document.addEventListener("keydown", (e) => {
   const k = e.keyCode || e.which;
 
+  // auth overlay
+  if (!$("auth-overlay").classList.contains("hidden")) {
+    if (k === 404 || k === 461 || k === 27) {
+      if (LS.get("sv_onboarded", false)) { AuthUI.close(); showTab("home"); }
+      e.preventDefault();
+    }
+    return;
+  }
+  // settings overlay
+  if (!$("settings-overlay").classList.contains("hidden")) {
+    if (k === 404 || k === 461 || k === 27 || k === 13) { closeSettings(); e.preventDefault(); }
+    return;
+  }
   // search overlay
   if (!$("search-overlay").classList.contains("hidden")) {
     if (k === 404 || k === 461 || k === 27) { closeSearch(); e.preventDefault(); return; }
@@ -824,6 +844,7 @@ function initVideoListeners(v) {
       season, episode, updatedAt: Date.now(),
     };
     LS.set("sv_progress", cont);
+    if (typeof Sync !== "undefined") Sync.schedulePush();
   });
 }
 
@@ -1026,8 +1047,24 @@ window.addEventListener("load", () => {
         if (!S.subs.length) { toast("No subtitles found"); return; }
         openSubs();
       });
+      // TV scaling: design width 1280 — zoom to actual viewport
+      applyZoom();
+      window.addEventListener("resize", applyZoom);
+
       $("app").classList.remove("hidden");
-      showTab("home");
+      renderAccountChip();
+      $("btn-gear") && $("btn-gear").addEventListener("click", openSettings);
+      $("account-chip") && $("account-chip").addEventListener("click", openSettings);
+
+      if (!LS.get("sv_onboarded", false)) {
+        // first launch: auth flow over the boot screen
+        $("splash").classList.add("done");
+        AuthUI.open();
+      } else {
+        showTab("home");
+        // background sync pull for returning sessions
+        if (getSession()) Sync.pull().then(function () { showTab(S.tab); });
+      }
     } catch (e) {
       try { $("splash").classList.add("done"); } catch (e2) {}
     }
