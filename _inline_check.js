@@ -1,3 +1,70 @@
+    /* ---- inline boot diagnostics: runs before anything else, cannot fail ---- */
+    window.__diag = function (msg) {
+      var el = document.getElementById("diag");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "diag";
+        (document.body || document.documentElement).appendChild(el);
+      }
+      el.textContent = msg;
+      el.classList.add("show");
+    };
+    window.onerror = function (msg, src, line) {
+      window.__diag("ERROR: " + msg + " @ " + (src || "?").split("/").pop() + ":" + line);
+      return false;
+    };
+    window.__diag("boot: html loaded");
+    window.addEventListener("load", function () { window.__diag("boot: window load"); });
+  </script>
+</head>
+<body>
+  <div id="splash">
+    <div class="splash-mark">Stream<em>Viva</em></div>
+    <div class="splash-sub">now showing</div>
+    <div class="splash-ver">v1.3.0</div>
+  </div>
+
+  <div id="app" class="hidden">
+    <header id="topbar">
+      <div class="wordmark">Stream<em>Viva</em></div>
+      <nav id="tabs"></nav>
+      <div class="top-actions">
+        <div class="top-btn" id="btn-search">Search</div>
+      </div>
+    </header>
+
+    <main id="content"></main>
+  </div>
+
+  <div id="player" class="hidden">
+    <video id="video" autoplay playsinline></video>
+    <div id="player-top">
+      <div class="wordmark small">Stream<em>Viva</em></div>
+      <div id="player-title"></div>
+      <div class="player-actions">
+        <div class="top-btn" id="btn-subs">CC</div>
+        <div class="top-btn" id="btn-stop">Stop</div>
+      </div>
+    </div>
+    <div id="player-busy"><div class="spinner"></div></div>
+  </div>
+
+  <div id="search-overlay" class="hidden">
+    <input id="search-input" type="text" placeholder="Search movies, shows..." autocomplete="off" />
+    <div id="search-results"></div>
+  </div>
+
+  <div id="subs-overlay" class="hidden">
+    <div class="subs-panel">
+      <div class="subs-title">Subtitles</div>
+      <div id="subs-list"></div>
+    </div>
+  </div>
+
+  <script>
+    window.__diag("boot: app inlined");
+  </script>
+  <script>
 /* StreamViva for webOS TV — complete UI.
    10-foot interface, D-pad focus engine, native HLS playback. */
 "use strict";
@@ -13,7 +80,7 @@ const VIDAPI = "https://data.vidsrc.sh/api.php";
 const VDRK = "https://sub.vdrk.site";
 
 const LS = {
-  get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } },
+  get(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return (v === null || v === undefined) ? d : v; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
 };
 
