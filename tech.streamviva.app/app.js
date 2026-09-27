@@ -541,7 +541,25 @@ async function play(media, season, episode, resumeMs) {
       video.addEventListener("loadedmetadata", () => { try { video.currentTime = resumeMs / 1000; } catch (e) {} }, { once: true });
     }
     video.play().catch(() => {});
-    loadSubs(media, season, episode);
+    loadSubs(media, season, episode).then(() => {
+      const pref = LS.get("sv_sublang", null);
+      if (pref) {
+        const found = S.subs.find((s) => s.label === pref);
+        if (found) {
+          S.selectedSub = found;
+          (async () => {
+            let url = found.url;
+            if (found.type === "srt") {
+              try { url = await srtToVttUrl(found.url); } catch (e) { return; }
+            }
+            const track = document.createElement("track");
+            track.kind = "subtitles"; track.label = found.label; track.src = url; track.default = true;
+            video.appendChild(track);
+            setTimeout(() => { if (video.textTracks && video.textTracks[0]) video.textTracks[0].mode = "showing"; }, 400);
+          })();
+        }
+      }
+    });
   } catch (e) {
     $("player-busy").style.display = "none";
     toast("⚠ " + e.message);
@@ -601,22 +619,77 @@ $("btn-subs").addEventListener("click", () => {
 
 async function loadSubs(media, season, episode) {
   S.subs = [];
+  const [vdrk, os] = await Promise.all([
+    loadVdrkSubs(media, season, episode),
+    loadOpenSubs(media, season, episode),
+  ]);
+  const byLang = {};
+  vdrk.forEach((s) => { byLang[s.label] = s; });          // vdrk (native vtt) wins
+  os.forEach((s) => { if (!byLang[s.label]) byLang[s.label] = s; });
+  S.subs = Object.values(byLang).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+async function loadVdrkSubs(media, season, episode) {
   try {
     const url = season != null
       ? VDRK + "/v1/tv/" + media.id + "/" + season + "/" + episode
       : VDRK + "/v1/movie/" + media.id;
     const r = await fetch(url);
-    if (!r.ok) return;
+    if (!r.ok) return [];
     const arr = await r.json();
     const seen = {};
+    const out = [];
     (Array.isArray(arr) ? arr : []).forEach((s) => {
       if (!s.file || !s.label) return;
       const lang = s.label.replace(/\s*Hi\d*\s*$/, "").replace(/\s*\d+$/, "").trim();
       if (seen[lang]) return;
       seen[lang] = true;
-      S.subs.push({ label: lang, url: s.file });
+      out.push({ label: lang, url: s.file, type: "vtt", source: "vdrk" });
     });
-  } catch (e) {}
+    return out;
+  } catch (e) { return []; }
+}
+
+async function loadOpenSubs(media, season, episode) {
+  try {
+    if (!media._imdb) return [];
+    const imdbNum = media._imdb.replace(/^tt/, "");
+    const path = season != null
+      ? "episode-" + episode + "/imdbid-" + imdbNum + "/season-" + season
+      : "imdbid-" + imdbNum;
+    const r = await fetch("https://rest.opensubtitles.org/search/" + path, {
+      headers: { "X-User-Agent": "VLSub 0.10.2" },
+    });
+    if (!r.ok) return [];
+    const arr = await r.json();
+    const seen = {};
+    const out = [];
+    (Array.isArray(arr) ? arr : []).forEach((c) => {
+      if (c.SubFormat !== "srt") return;
+      const lang = (c.LanguageName || "").trim();
+      if (!lang || seen[lang]) return;
+      const url = (c.SubDownloadLink || "")
+        .replace(".gz", "")
+        .replace("download/", "download/subencoding-utf8/");
+      if (!url) return;
+      seen[lang] = true;
+      out.push({ label: lang, url, type: "srt", source: "opensubs" });
+    });
+    return out;
+  } catch (e) { return []; }
+}
+
+/* SRT -> VTT for the <track> element */
+async function srtToVttUrl(srtUrl) {
+  const r = await fetch(srtUrl, { headers: { "X-User-Agent": "VLSub 0.10.2" } });
+  let text = await r.text();
+  text = text.replace(/\r/g, "");
+  const body = text
+    .replace(/^\uFEFF/, "")
+    .replace(/^(\d+)\s*\n/gm, "")             // strip index lines
+    .replace(/(\d{2}):(\d{2}):(\d{2}),(\d{3})/g, "$1:$2:$3.$4");
+  const vtt = "WEBVTT\n\n" + body;
+  return URL.createObjectURL(new Blob([vtt], { type: "text/vtt" }));
 }
 
 function removeSubs() {
@@ -635,7 +708,7 @@ function openSubs() {
     const row = document.createElement("div");
     row.className = "sub-row" + (S.selectedSub && S.selectedSub.url === s.url ? " active" : "");
     row.dataset.i = i;
-    row.innerHTML = esc(s.label);
+    row.innerHTML = esc(s.label) + "<small>" + s.source + "</small>";
     list.appendChild(row);
   });
   $("subs-overlay").classList.remove("hidden");
@@ -666,15 +739,21 @@ function pickSub() {
     const sub = S.subs[i];
     S.selectedSub = sub;
     LS.set("sv_sublang", sub.label);
-    const track = document.createElement("track");
-    track.kind = "subtitles";
-    track.label = sub.label;
-    track.src = sub.url;
-    track.default = true;
-    video.appendChild(track);
-    setTimeout(() => {
-      if (video.textTracks && video.textTracks[0]) video.textTracks[0].mode = "showing";
-    }, 300);
+    (async () => {
+      let url = sub.url;
+      if (sub.type === "srt") {
+        try { url = await srtToVttUrl(sub.url); } catch (e) { toast("subtitle load failed"); return; }
+      }
+      const track = document.createElement("track");
+      track.kind = "subtitles";
+      track.label = sub.label;
+      track.src = url;
+      track.default = true;
+      video.appendChild(track);
+      setTimeout(() => {
+        if (video.textTracks && video.textTracks[0]) video.textTracks[0].mode = "showing";
+      }, 400);
+    })();
   }
   closeSubs();
 }
